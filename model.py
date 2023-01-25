@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class ffn(nn.Module):
-    def __init__(self, vocab_size, context_length):
+    def __init__(self, vocab_size, hidden_size, context_length):
         super().__init__()
-        self.embd = nn.Embedding(vocab_size, 200)
-        self.linear = nn.Linear(200, 200)
-        self.proj = nn.Linear(200, vocab_size)
+        self.embd = nn.Embedding(vocab_size, hidden_size)
+        self.linear = nn.Linear(hidden_size, hidden_size)
+        self.proj = nn.Linear(hidden_size, vocab_size)
         self.relu = nn.ReLU()
         self.context_length = context_length
 

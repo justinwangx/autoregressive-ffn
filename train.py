@@ -24,7 +24,7 @@ split = int(0.9*len(data))
 train_data = encode(data[:split])
 test_data = encode(data[split:])
 
-def get_batch(batch_size, split='train'):
+def get_batch(batch_size, context_length, split='train'):
     """
     Returns a LongTensor of shape (bs, context_length) 
     """
@@ -38,7 +38,7 @@ def train(model, optimizer, cfg):
 
     model.train()
     for n in range(cfg.num_iters):
-        inp, tgt = get_batch(cfg.batch_size, 'train')
+        inp, tgt = get_batch(cfg.batch_size, cfg.context_length, 'train')
         logits = model(inp)
         tgt = tgt.long()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), tgt.view(-1), ignore_index=-1)
@@ -53,7 +53,7 @@ def train(model, optimizer, cfg):
     torch.save(model.state_dict(), cfg.save_path) 
 
 def main(cfg):
-    model = ffn()
+    model = ffn(cfg.vocab_size, cfg.hidden_size, cfg.context_length)
     optimizer = optim.SGD(model.parameters(), lr=1e-2)
     train(model, optimizer, cfg)
 
@@ -68,22 +68,3 @@ if __name__ == '__main__':
     parser.add_argument('--save_path', type=str, default='./ckpt.pth')
     cfg = parser.parse_args()
     main(cfg)
-
-    # model.load_state_dict(torch.load('ckpt10k.pth'))
-    # model.eval()
-    # prompt = torch.zeros(1, 3).long()
-    # prompt[0, :] = torch.LongTensor(encode('Our'))
-    # seq = model.generate(prompt).squeeze().tolist()
-    # string = decode(seq)
-    # string = ' '.join(string)
-    # print(string)
-
-    # checking input output pairs
-    context_length = 10
-    x,y = get_batch()
-    for i in range(3):
-        inp = ' '.join(decode(x[i].tolist()))
-        out = ' '.join(decode(y[i].tolist()))
-        print(f'y{i}: {out}')
-        print(f'x{i}: {inp}')
-        print()
