@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import argparse
+from model import ffn
 
 # data processing
 # all characters (1,115,394 total)
@@ -22,13 +24,7 @@ split = int(0.9*len(data))
 train_data = encode(data[:split])
 test_data = encode(data[split:])
 
-# hyperparams
-context_length = 200
-batch_size = 100
-num_iters = 10000
-eval_iter = 100
-
-def get_batch(split='train'):
+def get_batch(batch_size, split='train'):
     """
     Returns a LongTensor of shape (bs, context_length) 
     """
@@ -38,36 +34,11 @@ def get_batch(split='train'):
     y = torch.stack([torch.LongTensor(train_data[i+1:i+1+context_length]) for i in ix])
     return x, y
 
-class ffn(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.embd = nn.Embedding(vocab_size, 200)
-        self.linear = nn.Linear(200, 200)
-        self.proj = nn.Linear(200, vocab_size)
-        self.relu = nn.ReLU()
+def train(model, optimizer, cfg):
 
-    def forward(self, x, targets=None):
-        logits = self.proj(self.relu(self.linear(self.embd(x))))
-        return logits
-    
-    def generate(self, seq, max_new_chars=150):
-        for _ in range(max_new_chars):
-            context = seq if seq.size(1) <= context_length else seq[:,-context_length:]
-            logits = self(context)
-            logits = logits[:,-1,:] # .unsqueeze(1)
-
-            v, _ = torch.topk(logits, min(3, logits.size(-1)))
-            logits[logits < v[:, [-1]]] = -float('Inf')
-
-            pred = F.softmax(logits, dim=-1)
-            pred = torch.multinomial(pred, num_samples=1)
-            seq = torch.cat([seq, pred], dim=1)
-        return seq
-
-def train(model, optimizer):
     model.train()
-    for n in range(num_iters):
-        inp, tgt = get_batch('train')
+    for n in range(cfg.num_iters):
+        inp, tgt = get_batch(cfg.batch_size, 'train')
         logits = model(inp)
         tgt = tgt.long()
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), tgt.view(-1), ignore_index=-1)
@@ -75,19 +46,29 @@ def train(model, optimizer):
         optimizer.step()
         optimizer.zero_grad()
 
-        if num_iters % eval_iter == 0:
+        if cfg.num_iters % cfg.eval_iter == 0:
             print(f'Step: {n}')
             print(f'Loss: {loss}')
     
-    torch.save(model.state_dict(), 'ckpt10k.pth') # final loss: 2.49
+    torch.save(model.state_dict(), cfg.save_path) 
+
+def main(cfg):
+    model = ffn()
+    optimizer = optim.SGD(model.parameters(), lr=1e-2)
+    train(model, optimizer, cfg)
 
 if __name__ == '__main__':
-    # model = ffn()
-    # optimizer = optim.SGD(model.parameters(), lr=1e-2)
+    parser = argparse.ArgumentParser
+    parser.add_argument('--vocab_size', type=int, default=65) 
+    parser.add_argument('--hidden_size', type=int, default=200) 
+    parser.add_argument('--context_length', type=int, default=200) 
+    parser.add_argument('--batch_size', type=int, default=100) 
+    parser.add_argument('--num_iters', type=int, default=10000) 
+    parser.add_argument('--eval_iters', type=int, default=100) 
+    parser.add_argument('--save_path', type=str, default='./ckpt.pth')
+    cfg = parser.parse_args()
+    main(cfg)
 
-    if False: 
-        train(model, optimizer)
-    
     # model.load_state_dict(torch.load('ckpt10k.pth'))
     # model.eval()
     # prompt = torch.zeros(1, 3).long()
