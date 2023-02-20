@@ -1,43 +1,40 @@
 import torch
+import torch.nn.functional as F
 from model import ffn
+from data import Data
 import argparse
 
-# todo save character list and don't load it every time
-# all characters (1,115,394 total)
-data = open('data/tinyshakespeare.txt', 'r').read()
-# unique characters (65 total)
-chars = sorted(list(set(data)))
-data_size, vocab_size = len(data), len(chars)
-cti = {c:i for i,c in enumerate(chars)}
-itc = {i:c for i,c in enumerate(chars)}
+def generate(model, data, prompt, max_length=150):
+    initial = prompt = prompt[-1]
+    prompt = torch.tensor(data.cti[prompt])
+    prompt = F.one_hot(prompt, num_classes=cfg.vocab_size).to(dtype=torch.float32)
 
-def encode(chars):
-    return [cti[c] for c in chars]
-def decode(nums):
-    return [itc[n] for n in nums]
+    output = []
+    while len(output) < max_length:
+        y = model(prompt)
+        idx = torch.argmax(torch.softmax(y, dim=-1)).item()
+        print(f'Pred idx: {idx}')
+        nc = data.itc[idx]
+        print(f'Pred char: {nc}')
+        output.append(nc)
+        prompt = y
 
-def generate(model, prompt):
-    inp = torch.zeros(1, len(prompt)).long()
-    inp[0,:] = torch.LongTensor(encode(prompt))
-    seq = model.generate(inp).squeeze().tolist()
-    string = decode(seq)
-    string = ' '.join(string)
-    print(string)
+    output = ''.join([c for c in output])
+    print(f'{initial}{output}')
 
 def main(cfg):
-    model = ffn(cfg.vocab_size, cfg.context_length) 
+    model = ffn(cfg.vocab_size, cfg.hidden_size) 
     model.load_state_dict(torch.load(cfg.weights_path))
     model.eval()
-    generate(model, cfg.prompt)
+    data = Data()
+    generate(model, data, cfg.prompt)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--vocab_size', type=int, default=65) 
-    parser.add_argument('--hidden_size', type=int, default=200) 
-    parser.add_argument('--context_length', type=int, default=200)
-    parser.add_argument('--weights_path', type=str, default='ckpt10k.pth')
+    parser.add_argument('--vocab_size', type=int, default=64) 
+    parser.add_argument('--hidden_size', type=int, default=128)
+    parser.add_argument('--weights_path', type=str, default='ckpt.pth')
     parser.add_argument('--prompt', type=str, default='When')
 
     cfg = parser.parse_args()
     main(cfg)
-

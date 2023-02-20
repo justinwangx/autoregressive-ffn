@@ -1,70 +1,70 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
 import argparse
+import numpy as np
+import time
 from model import ffn
+from data import Data
 
-# data processing
-# all characters (1,115,394 total)
-data = open('data/tinyshakespeare.txt', 'r').read()
-# unique characters (65 total)
-chars = sorted(list(set(data)))
-data_size, vocab_size = len(data), len(chars)
-cti = {c:i for i,c in enumerate(chars)}
-itc = {i:c for i,c in enumerate(chars)}
-
-def encode(chars):
-    return [cti[c] for c in chars]
-def decode(nums):
-    return [itc[n] for n in nums]
-
-# create train and test splits
-split = int(0.9*len(data))
-train_data = encode(data[:split])
-test_data = encode(data[split:])
-
-def get_batch(batch_size, context_length, split='train'):
-    """
-    Returns a LongTensor of shape (bs, context_length) 
-    """
-    data = train_data if split=='train' else test_data
-    ix = torch.randint(len(data) - context_length, (batch_size,))
-    x = torch.stack([torch.LongTensor(train_data[i:i+context_length]) for i in ix])
-    y = torch.stack([torch.LongTensor(train_data[i+1:i+1+context_length]) for i in ix])
-    return x, y
-
-def train(model, optimizer, cfg):
+def train(model, data, optimizer, cfg):
+    log_dir = 'logs/'
+    writer = SummaryWriter(log_dir)
 
     model.train()
+    start = time.time()
+    iter_times = []
     for n in range(cfg.num_iters):
-        inp, tgt = get_batch(cfg.batch_size, cfg.context_length, 'train')
+        t_s = time.time()
+        inp, tgt = data.get_batch(cfg.batch_size, 'train')
+        inp = F.one_hot(inp, num_classes=data.vocab_size).to(dtype=torch.float32)
+        tgt = F.one_hot(tgt, num_classes=data.vocab_size).to(dtype=torch.float32)
+
         logits = model(inp)
-        tgt = tgt.long()
-        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), tgt.view(-1), ignore_index=-1)
+        loss = F.cross_entropy(logits, tgt)
+
+        writer.add_scalar("Loss/train", loss.item(), global_step=n)
+
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-
-        if cfg.num_iters % cfg.eval_iter == 0:
+        
+        iter_times.append(time.time() - t_s)
+        if n % cfg.eval_iter == 0:
             print(f'Step: {n}')
             print(f'Loss: {loss}')
-    
-    torch.save(model.state_dict(), cfg.save_path) 
+            print(f'Avg time per step: {np.mean(iter_times)}')
+            iter_times = []
+
+            # validation
+            with torch.no_grad():
+                inp, tgt = data.get_batch(cfg.batch_size, 'test')
+                inp = F.one_hot(inp, num_classes=data.vocab_size).to(dtype=torch.float32)
+                tgt = F.one_hot(tgt, num_classes=data.vocab_size).to(dtype=torch.float32)
+                logits = model(inp)
+                loss = F.cross_entropy(logits, tgt)
+                writer.add_scalar("Loss/test", loss.item(), global_step=n)
+                print(f'Validation loss: {loss}')
+                torch.save(model.state_dict(), f'checkpoints/{cfg.name}{n}.pth')
+
+    print(f'Total time taken: {time.time() - start}')
+    torch.save(model.state_dict(), f'{cfg.name}.pth') 
 
 def main(cfg):
-    model = ffn(cfg.vocab_size, cfg.hidden_size, cfg.context_length)
-    optimizer = optim.SGD(model.parameters(), lr=1e-2)
-    train(model, optimizer, cfg)
+    model = ffn(cfg.vocab_size, cfg.hidden_size)
+    data = Data()
+    optimizer = optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=1e-3)
+    train(model, data, optimizer, cfg)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser
-    parser.add_argument('--vocab_size', type=int, default=65) 
-    parser.add_argument('--hidden_size', type=int, default=200) 
-    parser.add_argument('--context_length', type=int, default=200) 
-    parser.add_argument('--batch_size', type=int, default=100) 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--vocab_size', type=int, default=64) 
+    parser.add_argument('--hidden_size', type=int, default=128) 
+    parser.add_argument('--batch_size', type=int, default=16) 
+    parser.add_argument('--lr', type=int, default=1e-3) 
     parser.add_argument('--num_iters', type=int, default=10000) 
-    parser.add_argument('--eval_iters', type=int, default=100) 
-    parser.add_argument('--save_path', type=str, default='./ckpt.pth')
+    parser.add_argument('--eval_iter', type=int, default=1000) 
+    parser.add_argument('--name', type=str, default='ckpt')
     cfg = parser.parse_args()
     main(cfg)

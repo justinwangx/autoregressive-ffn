@@ -1,3 +1,5 @@
 *.pth
 *.ipynb*
 __pycache__
+/logs
+/checkpoints
