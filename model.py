@@ -5,18 +5,12 @@ class ffn(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(vocab_size, hidden_size),
-            nn.Dropout(0.25),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(hidden_size, hidden_size),
-            nn.Dropout(0.25),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.Dropout(0.25),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(hidden_size, vocab_size)
         )
 
     def forward(self, x):
-        logits = self.net(x)
-        return logits
+        return self.net(x)
     

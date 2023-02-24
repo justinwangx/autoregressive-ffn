@@ -8,7 +8,6 @@ class Data():
         # unique characters (65 total)
         self.data = open('data/tinyshakespeare.txt', 'r').read()
         self.chars = sorted(list(set(self.data)))
-        self.chars.remove('\n')
         self.vocab_size = len(self.chars)
         self.cti = {c:i for i,c in enumerate(self.chars)}
         self.itc = {i:c for i,c in enumerate(self.chars)}
@@ -28,20 +27,17 @@ class Data():
         # next-character pairs
         x = []
         y = []
-        # dumb idiot trying to predict 50 dimensional input?
         # x = torch.tensor(batch_size, 1)
         # y = torch.tensor(batch_size, 1)
         for i in range(batch_size):
-            sentence = random.choice(data)
+            sentence = random.choice(data) + '\n'
 
             # sentence = data[0] # check to overfit on a sentence
-
             while len(sentence) < 2:
                 sentence = random.choice(data)
-            sentence = self.encode(sentence)
             idx = random.randint(0, len(sentence)-2)
-            x.append(sentence[idx])
-            y.append(sentence[idx+1])
+            x.append(self.cti[sentence[idx]])
+            y.append(self.cti[sentence[idx+1]])
         return torch.tensor(x), torch.tensor(y)
 
     def encode(self, chars):

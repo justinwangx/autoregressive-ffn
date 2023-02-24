@@ -7,17 +7,16 @@ import argparse
 def generate(model, data, prompt, max_length=150):
     initial = prompt = prompt[-1]
     prompt = torch.tensor(data.cti[prompt])
-    prompt = F.one_hot(prompt, num_classes=cfg.vocab_size).to(dtype=torch.float32)
+    prompt = F.one_hot(prompt, num_classes=cfg.vocab_size).float()
 
     output = []
     while len(output) < max_length:
         y = model(prompt)
-        idx = torch.argmax(torch.softmax(y, dim=-1)).item()
-        print(f'Pred idx: {idx}')
+        pred = torch.softmax(y, dim=-1)
+        idx = torch.multinomial(pred, num_samples=1).item()
         nc = data.itc[idx]
-        print(f'Pred char: {nc}')
         output.append(nc)
-        prompt = y
+        prompt = F.one_hot(torch.tensor(idx), num_classes=cfg.vocab_size).float()
 
     output = ''.join([c for c in output])
     print(f'{initial}{output}')
@@ -31,8 +30,8 @@ def main(cfg):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--vocab_size', type=int, default=64) 
-    parser.add_argument('--hidden_size', type=int, default=128)
+    parser.add_argument('--vocab_size', type=int, default=65) 
+    parser.add_argument('--hidden_size', type=int, default=100)
     parser.add_argument('--weights_path', type=str, default='ckpt.pth')
     parser.add_argument('--prompt', type=str, default='When')
 
