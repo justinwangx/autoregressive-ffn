@@ -18,7 +18,7 @@ class Data():
             data.append(self.cti[ch])
         self.data = np.array(data)
 
-        # create dataset of character ngrams, train and test splits
+        # create dataset of character n-grams, train and test splits
         split = int(0.9 * self.data.shape[0])
         strides = self.data.strides[0]
         self.data = np.lib.stride_tricks.as_strided(data, shape=(self.data.shape[0]-context_length, context_length+1), strides=(strides, strides))
@@ -29,6 +29,5 @@ class Data():
     
     def get_batch(self, batch_size, split='train'):
         X, Y = (self.Xtrain, self.Ytrain) if split=='train' else (self.Xtest, self.Ytest)
-        # next-character pairs
         batch_indices = np.random.randint(0, X.shape[0], (batch_size,))
         return torch.tensor(X[batch_indices]), torch.tensor(Y[batch_indices])
